@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	// STEP 5-1: uncomment this line
@@ -13,7 +14,7 @@ import (
 var errImageNotFound = errors.New("image not found")
 
 type Items struct {
-	Items []*Item `json:items`
+	Items []*Item `json:"items"`
 }
 
 type Item struct {
@@ -27,8 +28,8 @@ type Item struct {
 //
 //go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -package=${GOPACKAGE} -destination=./mock_$GOFILE
 type ItemRepository interface {
+	SelectAll(ctx context.Context) (*Items, error)
 	Insert(ctx context.Context, item *Item) error
-	InsertToFile(ctx context.Context, item *Item) error
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -42,11 +43,50 @@ func NewItemRepository() ItemRepository {
 	return &itemRepository{fileName: "items.json"}
 }
 
+func (i *itemRepository) SelectAll(ctx context.Context) (*Items, error) {
+	if i.fileName != "" {
+		items, error := i.getItemsFromFile(ctx)
+		return items, error
+	}
+
+	return nil, fmt.Errorf("SelectAll is not implemented")
+}
+
+func (i *itemRepository) getItemsFromFile(ctx context.Context) (*Items, error) {
+	var items Items
+	// checks if file exists
+	if _, err := os.Stat(i.fileName); err == nil {
+		f, err := os.Open(i.fileName)
+		if err != nil {
+			return nil, err
+		}
+
+		defer f.Close()
+
+		// Decode existing items
+		if err := json.NewDecoder(f).Decode(&items); err != nil {
+			return nil, err
+		}
+	} else if os.IsNotExist(err) {
+		items.Items = []*Item{}
+	} else {
+		return nil, err
+	}
+
+	return &items, nil
+
+}
+
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	// STEP 4-2: add an implementation to store an item
-
-	return nil
+	if i.fileName != "" {
+		error := i.InsertToFile(ctx, item)
+		if error != nil {
+			return error
+		}
+	}
+	return fmt.Errorf("Insert to DB is not implemented")
 }
 
 // Insert inserts an item into the file.
