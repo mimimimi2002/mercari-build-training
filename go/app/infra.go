@@ -30,6 +30,7 @@ type Item struct {
 //go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -package=${GOPACKAGE} -destination=./mock_$GOFILE
 type ItemRepository interface {
 	SelectAll(ctx context.Context) (*Items, error)
+	SelectByID(ctx context.Context, itemID int) (*Item, error)
 	Insert(ctx context.Context, item *Item) error
 }
 
@@ -51,6 +52,33 @@ func (i *itemRepository) SelectAll(ctx context.Context) (*Items, error) {
 	}
 
 	return nil, fmt.Errorf("SelectAll is not implemented")
+}
+
+func (i *itemRepository) SelectByID(ctx context.Context, itemID int) (*Item, error) {
+	if i.fileName != "" {
+		item, err := i.getItemFromFileByID(ctx, itemID)
+		if err != nil {
+			return nil, err
+		}
+		return item, nil
+	}
+
+	return nil, fmt.Errorf("SelectByID is not implemented")
+}
+
+func (i *itemRepository) getItemFromFileByID(ctx context.Context, itemID int) (*Item, error) {
+	items, err := i.getItemsFromFile(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if items < 0 || items == nil || itemID >= len(items.Items) {
+		slog.Error("item not found")
+		return nil, errors.New("item not found")
+	}
+
+	return items.Items[itemID], nil
 }
 
 func (i *itemRepository) getItemsFromFile(ctx context.Context) (*Items, error) {

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -46,6 +47,7 @@ func (s Server) Run() int {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", h.Hello)
 	mux.HandleFunc("GET /items", h.GetItems)
+	mux.HandleFunc("GET /items/{item_id}", h.GetItemByID)
 	mux.HandleFunc("POST /items", h.AddItem)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
 
@@ -96,6 +98,16 @@ type AddItemResponse struct {
 	ImageName string `json:"image_name"`
 }
 
+type GetItemByIDRequest struct {
+	ItemID int `json:"item_id"`
+}
+
+type GetItemByIDResponse struct {
+	Name      string `json:"name"`
+	Category  string `json:"category"`
+	ImageName string `json:"image_name"`
+}
+
 // parseAddItemRequest parses and validates the request to add an item.
 func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 	req := &AddItemRequest{
@@ -132,6 +144,22 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 	if len(req.Image) == 0 {
 		return nil, errors.New("No bytes in the image")
 	}
+	return req, nil
+}
+
+func (s *Handlers) parseGetItemByIDRequest(r *http.Request) (*GetItemByIDRequest, error) {
+	itemID := r.PathValue("item_id")
+
+	i, err := strconv.Atoi(itemID)
+
+	if err != nil {
+		return nil, errors.New("Item id should be int")
+	}
+
+	req := &GetItemByIDRequest{
+		ItemID: i,
+	}
+
 	return req, nil
 }
 
@@ -208,6 +236,39 @@ func (s *Handlers) GetItems(w http.ResponseWriter, r *http.Request) {
 
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *Handlers) GetItemByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	req, err := s.parseGetItemByIDRequest(r)
+
+	if err != nil {
+		slog.Error("failed to parse get item by id request")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	item, err := s.itemRepo.SelectByID(ctx, req.ItemID)
+
+	if err != nil {
+		slog.Error("failed to get item from DB")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp := GetItemByIDResponse{
+		Name:      item.Name,
+		Category:  item.Category,
+		ImageName: item.ImageName,
+	}
+
+	err = json.NewEncoder(w).Encode(resp)
+
+	if err != nil {
+		slog.Error("failed to parse json of item")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
