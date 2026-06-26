@@ -18,9 +18,10 @@ type Items struct {
 }
 
 type Item struct {
-	ID       int    `db:"id" json:"-"`
-	Name     string `db:"name" json:"name"`
-	Category string `db:"category" json:"category"`
+	ID        int    `db:"id" json:"-"`
+	Name      string `db:"name" json:"name"`
+	Category  string `db:"category" json:"category"`
+	ImageName string `db:"image_name" json:"image_name"`
 }
 
 // Please run `go generate ./...` to generate the mock implementation
@@ -81,10 +82,7 @@ func (i *itemRepository) getItemsFromFile(ctx context.Context) (*Items, error) {
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	// STEP 4-2: add an implementation to store an item
 	if i.fileName != "" {
-		error := i.InsertToFile(ctx, item)
-		if error != nil {
-			return error
-		}
+		return i.InsertToFile(ctx, item)
 	}
 	return fmt.Errorf("Insert to DB is not implemented")
 }
