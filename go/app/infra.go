@@ -2,20 +2,16 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	// STEP 5-1: uncomment this line
-	// _ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var errImageNotFound = errors.New("image not found")
-
-type Items struct {
-	Items []*Item `json:"items"`
-}
 
 type Item struct {
 	ID        int    `db:"id" json:"-"`
@@ -29,29 +25,60 @@ type Item struct {
 //
 //go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -package=${GOPACKAGE} -destination=./mock_$GOFILE
 type ItemRepository interface {
-	SelectAll(ctx context.Context) (*Items, error)
+	SelectAll(ctx context.Context) ([]*Item, error)
 	SelectByID(ctx context.Context, itemID int) (*Item, error)
 	Insert(ctx context.Context, item *Item) error
 }
 
 // itemRepository is an implementation of ItemRepository
 type itemRepository struct {
+	dbPath string
 	// fileName is the path to the JSON file storing items.
 	fileName string
 }
 
 // NewItemRepository creates a new itemRepository.
 func NewItemRepository() ItemRepository {
-	return &itemRepository{fileName: "items.json"}
+	return &itemRepository{dbPath: "./db/mercari.sqlite3", fileName: ""}
 }
 
-func (i *itemRepository) SelectAll(ctx context.Context) (*Items, error) {
+func (i *itemRepository) SelectAll(ctx context.Context) ([]*Item, error) {
 	if i.fileName != "" {
-		items, error := i.getItemsFromFile(ctx)
-		return items, error
+		items, err := i.getItemsFromFile(ctx)
+		return items, err
 	}
 
-	return nil, fmt.Errorf("SelectAll is not implemented")
+	db, err := sql.Open("sqlite3", i.dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer db.Close()
+
+	rows, err := db.Query("SELECT id, name, category, image_name FROM items")
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close() // リソースの解放
+
+	items := []*Item{}
+
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.ImageName); err != nil {
+			return nil, err
+		}
+
+		items = append(items, &item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+
 }
 
 func (i *itemRepository) SelectByID(ctx context.Context, itemID int) (*Item, error) {
@@ -63,7 +90,25 @@ func (i *itemRepository) SelectByID(ctx context.Context, itemID int) (*Item, err
 		return item, nil
 	}
 
-	return nil, fmt.Errorf("SelectByID is not implemented")
+	var item Item
+
+	db, err := sql.Open("sqlite3", i.dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer db.Close()
+
+	err = db.QueryRow("SELECT id, name, category, image_name FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Category, &item.ImageName)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		return nil, err
+	}
+
+	return &item, nil
 }
 
 func (i *itemRepository) getItemFromFileByID(ctx context.Context, itemID int) (*Item, error) {
@@ -73,16 +118,16 @@ func (i *itemRepository) getItemFromFileByID(ctx context.Context, itemID int) (*
 		return nil, err
 	}
 
-	if items < 0 || items == nil || itemID >= len(items.Items) {
+	if itemID < 1 || items == nil || itemID > len(items) {
 		slog.Error("item not found")
 		return nil, errors.New("item not found")
 	}
 
-	return items.Items[itemID], nil
+	return items[itemID-1], nil
 }
 
-func (i *itemRepository) getItemsFromFile(ctx context.Context) (*Items, error) {
-	var items Items
+func (i *itemRepository) getItemsFromFile(ctx context.Context) ([]*Item, error) {
+	var items []*Item
 	// checks if file exists
 	if _, err := os.Stat(i.fileName); err == nil {
 		f, err := os.Open(i.fileName)
@@ -97,12 +142,12 @@ func (i *itemRepository) getItemsFromFile(ctx context.Context) (*Items, error) {
 			return nil, err
 		}
 	} else if os.IsNotExist(err) {
-		items.Items = []*Item{}
+		items = []*Item{}
 	} else {
 		return nil, err
 	}
 
-	return &items, nil
+	return items, nil
 
 }
 
@@ -112,12 +157,23 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	if i.fileName != "" {
 		return i.InsertToFile(ctx, item)
 	}
-	return fmt.Errorf("Insert to DB is not implemented")
+
+	db, err := sql.Open("sqlite3", i.dbPath)
+	if err != nil {
+		return err
+	}
+
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)", item.Name, item.Category, item.ImageName)
+
+	return err
+
 }
 
 // Insert inserts an item into the file.
 func (i *itemRepository) InsertToFile(ctx context.Context, item *Item) error {
-	var items Items
+	var items []*Item
 
 	// checks if file exists
 	if _, err := os.Stat(i.fileName); err == nil {
@@ -133,7 +189,7 @@ func (i *itemRepository) InsertToFile(ctx context.Context, item *Item) error {
 			return err
 		}
 	} else if os.IsNotExist(err) {
-		items.Items = []*Item{}
+		items = []*Item{}
 	} else {
 		return err
 	}
@@ -141,7 +197,7 @@ func (i *itemRepository) InsertToFile(ctx context.Context, item *Item) error {
 	slog.Info("file, items check before inserting")
 
 	// append new Items
-	items.Items = append(items.Items, item)
+	items = append(items, item)
 
 	// Marchal items to JSON
 	b, err := json.Marshal(items)

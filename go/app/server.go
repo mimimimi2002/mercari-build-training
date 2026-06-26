@@ -83,7 +83,7 @@ func (s *Handlers) Hello(w http.ResponseWriter, r *http.Request) {
 }
 
 type GetItemsResponse struct {
-	Items *Items `json:"items"`
+	Items []*Item `json:"items"`
 }
 
 type AddItemRequest struct {
