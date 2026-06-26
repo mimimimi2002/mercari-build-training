@@ -59,6 +59,7 @@ func (s Server) Run() int {
 	mux.HandleFunc("GET /", h.Hello)
 	mux.HandleFunc("GET /items", h.GetItems)
 	mux.HandleFunc("GET /items/{item_id}", h.GetItemByID)
+	mux.HandleFunc("GET /search", h.SearchItems)
 	mux.HandleFunc("POST /items", h.AddItem)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
 
@@ -117,6 +118,14 @@ type GetItemByIDResponse struct {
 	Name      string `json:"name"`
 	Category  string `json:"category"`
 	ImageName string `json:"image_name"`
+}
+
+type SearchItemsRequest struct {
+	KeyWord string `json:"key_word"`
+}
+
+type SearchItemResponse struct {
+	Items []*Item `json:"items"`
 }
 
 // parseAddItemRequest parses and validates the request to add an item.
@@ -280,6 +289,54 @@ func (s *Handlers) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Error("failed to parse json of item")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *Handlers) parseSearchRequest(r *http.Request) (*SearchItemsRequest, error) {
+	req := &SearchItemsRequest{
+		KeyWord: r.URL.Query().Get("keyword"),
+	}
+
+	if req.KeyWord == "" {
+		return nil, errors.New("keyword is required")
+	}
+
+	return req, nil
+}
+
+func (s *Handlers) SearchItems(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// parseRequest
+	req, err := s.parseSearchRequest(r)
+
+	if err != nil {
+		slog.Error("fail to parse search request")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	keyword := req.KeyWord
+
+	// get from DB
+	items, err := s.itemRepo.SearchByName(ctx, keyword)
+	if err != nil {
+		slog.Error("fail to search by name")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// parse to response
+	resp := SearchItemResponse{
+		Items: items,
+	}
+
+	err = json.NewEncoder(w).Encode(resp)
+
+	if err != nil {
+		slog.Error("failed to encode search items response")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

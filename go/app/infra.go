@@ -28,6 +28,7 @@ type ItemRepository interface {
 	SelectAll(ctx context.Context) ([]*Item, error)
 	SelectByID(ctx context.Context, itemID int) (*Item, error)
 	Insert(ctx context.Context, item *Item) error
+	SearchByName(ctx context.Context, keyWord string) ([]*Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -99,6 +100,41 @@ func (i *itemRepository) SelectByID(ctx context.Context, itemID int) (*Item, err
 	}
 
 	return &item, nil
+}
+
+func (i *itemRepository) SearchByName(ctx context.Context, keyword string) ([]*Item, error) {
+	// db connection
+	db := i.db
+
+	// db query
+	rows, err := db.Query("SELECT id, name, category, image_name FROM items WHERE name LIKE ?", "%"+keyword+"%")
+
+	if err != nil {
+		return nil, err
+	}
+
+	// defer rows
+	defer rows.Close()
+
+	// result items
+	items := []*Item{}
+
+	for rows.Next() {
+		var item Item
+		err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.ImageName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, &item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
 }
 
 func (i *itemRepository) getItemFromFileByID(ctx context.Context, itemID int) (*Item, error) {
