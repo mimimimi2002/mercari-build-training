@@ -8,6 +8,7 @@ import (
 const (
 	port         = "9000"
 	imageDirPath = "images"
+	dbPath       = "./db/mercari.sqlite3"
 )
 
 func main() {
@@ -16,5 +17,6 @@ func main() {
 	os.Exit(app.Server{
 		Port:         port,
 		ImageDirPath: imageDirPath,
+		DBPath:       dbPath,
 	}.Run())
 }

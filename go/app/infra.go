@@ -32,14 +32,14 @@ type ItemRepository interface {
 
 // itemRepository is an implementation of ItemRepository
 type itemRepository struct {
-	dbPath string
+	db *sql.DB
 	// fileName is the path to the JSON file storing items.
 	fileName string
 }
 
 // NewItemRepository creates a new itemRepository.
-func NewItemRepository() ItemRepository {
-	return &itemRepository{dbPath: "./db/mercari.sqlite3", fileName: ""}
+func NewItemRepository(db *sql.DB) ItemRepository {
+	return &itemRepository{db: db, fileName: ""}
 }
 
 func (i *itemRepository) SelectAll(ctx context.Context) ([]*Item, error) {
@@ -48,12 +48,7 @@ func (i *itemRepository) SelectAll(ctx context.Context) ([]*Item, error) {
 		return items, err
 	}
 
-	db, err := sql.Open("sqlite3", i.dbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	defer db.Close()
+	db := i.db
 
 	rows, err := db.Query("SELECT id, name, category, image_name FROM items")
 	if err != nil {
@@ -92,14 +87,9 @@ func (i *itemRepository) SelectByID(ctx context.Context, itemID int) (*Item, err
 
 	var item Item
 
-	db, err := sql.Open("sqlite3", i.dbPath)
-	if err != nil {
-		return nil, err
-	}
+	db := i.db
 
-	defer db.Close()
-
-	err = db.QueryRow("SELECT id, name, category, image_name FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Category, &item.ImageName)
+	err := db.QueryRow("SELECT id, name, category, image_name FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Category, &item.ImageName)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -158,14 +148,9 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 		return i.InsertToFile(ctx, item)
 	}
 
-	db, err := sql.Open("sqlite3", i.dbPath)
-	if err != nil {
-		return err
-	}
+	db := i.db
 
-	defer db.Close()
-
-	_, err = db.Exec("INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)", item.Name, item.Category, item.ImageName)
+	_, err := db.Exec("INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)", item.Name, item.Category, item.ImageName)
 
 	return err
 
