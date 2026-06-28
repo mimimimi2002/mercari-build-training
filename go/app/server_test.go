@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
@@ -12,8 +14,47 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// newMultipartItemRequest builds a POST /items request with multipart/form-data body.
+// Empty name/category are skipped, and a nil image means no file part is attached.
+func newMultipartItemRequest(t *testing.T, name, category string, image []byte) *http.Request {
+	t.Helper()
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	if name != "" {
+		mw.WriteField("name", name)
+	}
+	if category != "" {
+		mw.WriteField("category", category)
+	}
+	if image != nil {
+		fw, err := mw.CreateFormFile("image", "test.jpg")
+		if err != nil {
+			t.Fatalf("failed to create form file: %v", err)
+		}
+		if _, err := fw.Write(image); err != nil {
+			t.Fatalf("failed to write image: %v", err)
+		}
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "http://localhost:9000/items", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	return req
+}
+
 func TestParseAddItemRequest(t *testing.T) {
 	t.Parallel()
+
+	dummyImage := []byte("dummy image data")
+
+	type args struct {
+		name     string
+		category string
+		image    []byte
+	}
 
 	type wants struct {
 		req *AddItemRequest
@@ -22,24 +63,26 @@ func TestParseAddItemRequest(t *testing.T) {
 
 	// STEP 6-1: define test cases
 	cases := map[string]struct {
-		args map[string]string
+		args args
 		wants
 	}{
 		"ok: valid request": {
-			args: map[string]string{
-				"name":     "test_name",     // fill here
-				"category": "test_category", // fill here
+			args: args{
+				name:     "test_name",
+				category: "test_category",
+				image:    dummyImage,
 			},
 			wants: wants{
 				req: &AddItemRequest{
-					Name:     "test_name",     // fill here
-					Category: "test_category", // fill here
+					Name:     "test_name",
+					Category: "test_category",
+					Image:    dummyImage,
 				},
 				err: false,
 			},
 		},
 		"ng: empty request": {
-			args: map[string]string{},
+			args: args{},
 			wants: wants{
 				req: nil,
 				err: true,
@@ -51,18 +94,8 @@ func TestParseAddItemRequest(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			// prepare request body
-			values := url.Values{}
-			for k, v := range tt.args {
-				values.Set(k, v)
-			}
-
-			// prepare HTTP request
-			req, err := http.NewRequest("POST", "http://localhost:9000/items", strings.NewReader(values.Encode()))
-			if err != nil {
-				t.Fatalf("failed to create request: %v", err)
-			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			// prepare HTTP request (multipart/form-data, because parseAddItemRequest reads r.FormFile)
+			req := newMultipartItemRequest(t, tt.args.name, tt.args.category, tt.args.image)
 
 			// execute test target
 			got, err := parseAddItemRequest(req)
@@ -121,20 +154,33 @@ func TestHelloHandler(t *testing.T) {
 func TestAddItem(t *testing.T) {
 	t.Parallel()
 
+	dummyImage := []byte("dummy image")
+
+	type args struct {
+		name     string
+		category string
+		image    []byte
+	}
+
 	type wants struct {
 		code int
 	}
+
 	cases := map[string]struct {
-		args     map[string]string
+		args     args
 		injector func(m *MockItemRepository)
 		wants
 	}{
 		"ok: correctly inserted": {
-			args: map[string]string{
-				"name":     "used iPhone 16e",
-				"category": "phone",
+			args: args{
+				name:     "used iPhone 16e",
+				category: "phone",
+				image:    dummyImage,
 			},
 			injector: func(m *MockItemRepository) {
+				m.EXPECT().
+					Insert(gomock.Any(), gomock.Any()).
+					Return(nil)
 				// STEP 6-3: define mock expectation
 				// succeeded to insert
 			},
@@ -143,11 +189,15 @@ func TestAddItem(t *testing.T) {
 			},
 		},
 		"ng: failed to insert": {
-			args: map[string]string{
-				"name":     "used iPhone 16e",
-				"category": "phone",
+			args: args{
+				name:     "used iPhone 16e",
+				category: "phone",
+				image:    dummyImage,
 			},
 			injector: func(m *MockItemRepository) {
+				m.EXPECT().
+					Insert(gomock.Any(), gomock.Any()).
+					Return(errors.New("db error"))
 				// STEP 6-3: define mock expectation
 				// failed to insert
 			},
@@ -165,14 +215,10 @@ func TestAddItem(t *testing.T) {
 
 			mockIR := NewMockItemRepository(ctrl)
 			tt.injector(mockIR)
-			h := &Handlers{itemRepo: mockIR}
+			// imgDirPath points to a temp dir so storeImage does not pollute the repo.
+			h := &Handlers{itemRepo: mockIR, imgDirPath: t.TempDir()}
 
-			values := url.Values{}
-			for k, v := range tt.args {
-				values.Set(k, v)
-			}
-			req := httptest.NewRequest("POST", "/items", strings.NewReader(values.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req := newMultipartItemRequest(t, tt.args.name, tt.args.category, tt.args.image)
 
 			rr := httptest.NewRecorder()
 			h.AddItem(rr, req)
@@ -184,7 +230,7 @@ func TestAddItem(t *testing.T) {
 				return
 			}
 
-			for _, v := range tt.args {
+			for _, v := range []string{tt.args.name, tt.args.category} {
 				if !strings.Contains(rr.Body.String(), v) {
 					t.Errorf("response body does not contain %s, got: %s", v, rr.Body.String())
 				}

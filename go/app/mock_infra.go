@@ -53,3 +53,48 @@ func (mr *MockItemRepositoryMockRecorder) Insert(ctx, item any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockItemRepository)(nil).Insert), ctx, item)
 }
+
+// SearchByName mocks base method.
+func (m *MockItemRepository) SearchByName(ctx context.Context, keyWord string) ([]*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchByName", ctx, keyWord)
+	ret0, _ := ret[0].([]*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchByName indicates an expected call of SearchByName.
+func (mr *MockItemRepositoryMockRecorder) SearchByName(ctx, keyWord any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchByName", reflect.TypeOf((*MockItemRepository)(nil).SearchByName), ctx, keyWord)
+}
+
+// SelectAll mocks base method.
+func (m *MockItemRepository) SelectAll(ctx context.Context) ([]*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectAll", ctx)
+	ret0, _ := ret[0].([]*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectAll indicates an expected call of SelectAll.
+func (mr *MockItemRepositoryMockRecorder) SelectAll(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectAll", reflect.TypeOf((*MockItemRepository)(nil).SelectAll), ctx)
+}
+
+// SelectByID mocks base method.
+func (m *MockItemRepository) SelectByID(ctx context.Context, itemID int) (*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectByID", ctx, itemID)
+	ret0, _ := ret[0].(*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectByID indicates an expected call of SelectByID.
+func (mr *MockItemRepositoryMockRecorder) SelectByID(ctx, itemID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectByID", reflect.TypeOf((*MockItemRepository)(nil).SelectByID), ctx, itemID)
+}
