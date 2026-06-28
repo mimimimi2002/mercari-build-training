@@ -51,7 +51,8 @@ func (i *itemRepository) SelectAll(ctx context.Context) ([]*Item, error) {
 
 	db := i.db
 
-	rows, err := db.Query("SELECT id, name, category, image_name FROM items")
+	query := "SELECT i.id, i.name, c.name, i.image_name FROM items as i JOIN categories AS c ON i.category_id = c.id"
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,9 @@ func (i *itemRepository) SelectByID(ctx context.Context, itemID int) (*Item, err
 
 	db := i.db
 
-	err := db.QueryRow("SELECT id, name, category, image_name FROM items WHERE id = ?", itemID).Scan(&item.ID, &item.Name, &item.Category, &item.ImageName)
+	query := "SELECT i.id, i.name, c.name, i.image_name FROM items AS i JOIN categories AS c ON i.category_id = c.id WHERE i.id = ?"
+
+	err := db.QueryRow(query, itemID).Scan(&item.ID, &item.Name, &item.Category, &item.ImageName)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -106,8 +109,10 @@ func (i *itemRepository) SearchByName(ctx context.Context, keyword string) ([]*I
 	// db connection
 	db := i.db
 
+	query := "SELECT i.id, i.name, c.name, i.image_name FROM items AS i JOIN categories AS c ON i.category_id = c.id WHERE i.name LIKE ?"
+
 	// db query
-	rows, err := db.Query("SELECT id, name, category, image_name FROM items WHERE name LIKE ?", "%"+keyword+"%")
+	rows, err := db.Query(query, "%"+keyword+"%")
 
 	if err != nil {
 		return nil, err
@@ -186,7 +191,23 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 
 	db := i.db
 
-	_, err := db.Exec("INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)", item.Name, item.Category, item.ImageName)
+	insertCategoryQuery := "INSERT INTO categories (name) VALUES (?)"
+
+	result, err := db.Exec(insertCategoryQuery, item.Category)
+
+	if err != nil {
+		return err
+	}
+
+	categoryID, err := result.LastInsertId()
+
+	if err != nil {
+		return err
+	}
+
+	insertItemQuery := "INSERT INTO items(name, category_id, image_name) VALUES(?, ?, ?)"
+
+	_, err = db.Exec(insertItemQuery, item.Name, categoryID, item.ImageName)
 
 	return err
 
