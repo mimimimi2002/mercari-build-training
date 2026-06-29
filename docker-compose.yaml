@@ -1,10 +1,10 @@
 services:
   frontend:
-    image: mercari-build-training/web:latest
+    build: ./typescript/simple-mercari-web
     ports:
       - "3000:3000"
 
   backend:
-    image: mercari-build-training/app:latest
+    build: ./go
     ports:
       - "9000:9000"
