@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { Item, fetchItems } from '~/api';
 
 const PLACEHOLDER_IMAGE = import.meta.env.VITE_FRONTEND_URL + '/logo192.png';
+const BACKEND_IMAGES_PATH = import.meta.env.VITE_BACKEND_URL + '/images/';
+
+console.log(BACKEND_IMAGES_PATH)
+
 
 interface Prop {
   reload: boolean;
@@ -14,7 +18,7 @@ export const ItemList = ({ reload, onLoadCompleted }: Prop) => {
     const fetchData = () => {
       fetchItems()
         .then((data) => {
-          console.debug('GET success:', data);
+          console.log('GET success:', data);
           setItems(data.items);
           onLoadCompleted();
         })
@@ -34,7 +38,7 @@ export const ItemList = ({ reload, onLoadCompleted }: Prop) => {
         return (
           <div key={item.id} className="ItemList">
             {/* TODO: Task 2: Show item images */}
-            <img src={PLACEHOLDER_IMAGE} />
+            <img src={BACKEND_IMAGES_PATH + item.image_name} />
             <p>
               <span>Name: {item.name}</span>
               <br />
