@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Item, fetchItems } from '~/api';
 
-const PLACEHOLDER_IMAGE = import.meta.env.VITE_FRONTEND_URL + '/logo192.png';
 const BACKEND_IMAGES_PATH = import.meta.env.VITE_BACKEND_URL + '/images/';
 
 console.log(BACKEND_IMAGES_PATH)
@@ -33,7 +32,7 @@ export const ItemList = ({ reload, onLoadCompleted }: Prop) => {
   }, [reload, onLoadCompleted]);
 
   return (
-    <div>
+    <div className="ItemGrid">
       {items?.map((item) => {
         return (
           <div key={item.id} className="ItemList">
@@ -44,7 +43,7 @@ export const ItemList = ({ reload, onLoadCompleted }: Prop) => {
               <br />
               <span>Category: {item.category}</span>
             </p>
-          </div>
+        </div>
         );
       })}
     </div>
