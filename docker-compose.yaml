@@ -1,0 +1,10 @@
+services:
+  frontend:
+    image: mercari-build-training/web:latest
+    ports:
+      - "3000:3000"
+
+  backend:
+    image: mercari-build-training/app:latest
+    ports:
+      - "9000:9000"
